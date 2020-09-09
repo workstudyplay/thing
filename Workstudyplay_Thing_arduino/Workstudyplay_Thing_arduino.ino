@@ -64,14 +64,15 @@ void handleRoot() {
 
 void toggleAudio() {
   //  digitalWrite(audioLed, 1);
-  toggleZoomAudio();
   server.send(200, "text/html", "<script>window.location='/'</script>");
+  toggleZoomAudio();
 }
 
 void toggleVideo() {
   //  digitalWrite(videoLed, 1);
-  toggleZoomVideo();
+
   server.send(200, "text/html", "<script>window.location='/'</script>");
+  toggleZoomVideo();
 }
 
 void handleNotFound() {
