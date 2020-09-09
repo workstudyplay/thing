@@ -15,7 +15,7 @@
 */
 
 #include <BleKeyboard.h>
-BleKeyboard bleKeyboard;
+BleKeyboard bleKeyboard("Workstudyplay Thing", "Workstudyplay.org", 100);
 void setupBLE() {
   Serial.println("Starting BLE keyboard");
   bleKeyboard.begin();
