@@ -1,6 +1,10 @@
+#include <ArduinoJson.h>
+#include "FS.h"
+#include <LittleFS.h>
+
 #include <Wire.h>
 
-#include <i2cdetect.h>
+#include "I2CScanner.h"
 #include <Adafruit_NeoPixel.h>
 #ifdef __AVR__
 #include <avr/power.h>
@@ -15,7 +19,7 @@
 
 #include <ArduinoOTA.h>
 const char* ssid = "<Your SSID>";
-const char* password = "<Your WiFi Password>";
+const char* password = "<Your WiFi Password>!";
 ESP8266WebServer server(80);
 
 #elif defined(ESP32)
@@ -56,22 +60,165 @@ WiFiServer server(80);
 
 #endif
 
-#include "fauxmoESP.h"
+I2CScanner scanner;
+
 
 #include <WiFiClient.h>
 #include <WiFiUdp.h>
-//#include <ArduinoOTA.h>
-
-
-#include <Servo.h>
-Servo myservo;
 
 uint64_t chipid;
 
 String _hostname = "boop";
 
+bool loadConfig() {
+  File configFile = LittleFS.open("/config.json", "r");
+  if (!configFile) {
+    Serial.println("Failed to open config file");
+    return false;
+  }
 
-Adafruit_NeoPixel strip = Adafruit_NeoPixel(32, 2, NEO_GRB + NEO_KHZ800);
+  size_t size = configFile.size();
+  if (size > 1024) {
+    Serial.println("Config file size is too large");
+    return false;
+  }
+
+  // Allocate a buffer to store contents of the file.
+  std::unique_ptr<char[]> buf(new char[size]);
+
+  // We don't use String here because ArduinoJson library requires the input
+  // buffer to be mutable. If you don't use ArduinoJson, you may as well
+  // use configFile.readString instead.
+  configFile.readBytes(buf.get(), size);
+
+  StaticJsonDocument<200> doc;
+  auto error = deserializeJson(doc, buf.get());
+  if (error) {
+    Serial.println("Failed to parse config file");
+    return false;
+  }
+
+  const char* configVersion = doc["configVersion"];
+  const char* hostName = doc["hostname"];
+
+  Serial.print("Loaded configVersion: ");
+  Serial.println(configVersion);
+
+  Serial.print("Loaded hostname: ");
+  Serial.println(hostName);
+  _hostname = hostName;
+
+  return true;
+}
+
+//bool saveConfig() {
+//  StaticJsonDocument<200> doc;
+//  doc["serverName"] = "api.example.com";
+//  doc["accessToken"] = "128du9as8du12eoue8da98h123ueh9h98";
+//
+//  File configFile = LittleFS.open("/config.json", "w");
+//  if (!configFile) {
+//    Serial.println("Failed to open config file for writing");
+//    return false;
+//  }
+//
+//  serializeJson(doc, configFile);
+//  return true;
+//}
+
+
+#include <Adafruit_PWMServoDriver.h>
+// called this way, it uses the default address 0x40
+Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
+#define SERVOMIN  300 // This is the 'minimum' pulse length count (out of 4096)
+#define SERVOMAX  460 // This is the 'maximum' pulse length count (out of 4096)
+#define USMIN  600 // This is the rounded 'minimum' microsecond length based on the minimum pulse of 150
+#define USMAX  2400 // This is the rounded 'maximum' microsecond length based on the maximum pulse of 600
+#define SERVO_FREQ 50 // Analog servos run at ~50 Hz updates
+
+void setupServos() {
+  Serial.println("Setting up servo controller");
+  pwm.begin();
+  pwm.setOscillatorFrequency(27000000);
+  pwm.setPWMFreq(SERVO_FREQ);  // Analog servos run at ~50 Hz updates
+  delay(10);
+}
+
+// You can use this function if you'd like to set the pulse length in seconds
+// e.g. setServoPulse(0, 0.001) is a ~1 millisecond pulse width. It's not precise!
+void setServoPulse(uint8_t n, double pulse) {
+  double pulselength;
+
+  pulselength = 1000000;   // 1,000,000 us per second
+  pulselength /= SERVO_FREQ;   // Analog servos run at ~60 Hz updates
+  Serial.print(pulselength); Serial.println(" us per period");
+  pulselength /= 4096;  // 12 bits of resolution
+  Serial.print(pulselength); Serial.println(" us per bit");
+  pulse *= 1000000;  // convert input seconds to us
+  pulse /= pulselength;
+  Serial.println(pulse);
+  pwm.setPWM(n, 0, pulse);
+}
+
+int pulseWidth(int angle)
+{
+  int pulse_wide, analog_value;
+  pulse_wide   = map(angle, 0, 180, SERVOMIN, SERVOMAX);
+  analog_value = int(float(pulse_wide) / 1000000 * SERVO_FREQ * 4096);
+  Serial.println(analog_value);
+  return analog_value;
+}
+void setServo( int servonum, int angle ) {
+
+  pwm.setPWM(servonum, 0, pulseWidth(angle));
+
+  //  Serial.println(servonum);
+  //  for (uint16_t pulselen = SERVOMIN; pulselen < pos; pulselen++) {
+  //    pwm.setPWM(servonum, 0, pulselen);
+  //  }
+}
+
+void closeServo( int servonum ) {
+  Serial.println("Close Servo: " + String(servonum) );
+  for (uint16_t pulselen = SERVOMIN; pulselen < SERVOMAX; pulselen += 10) {
+    Serial.println("Pulse: " + String( pulselen ) );
+    pwm.setPWM(servonum, 0, pulselen);
+
+    delay(250);
+  }
+}
+void openServo( int servonum ) {
+  Serial.println("Open Servo: " + String(servonum) );
+  for (uint16_t pulselen = SERVOMAX; pulselen > SERVOMIN; pulselen -= 10) {
+    Serial.println("Pulse: " + String( pulselen ) );
+    pwm.setPWM(servonum, 0, pulselen);
+
+    delay(100);
+  }
+}
+
+void openFlower( int servonum ) {
+  Serial.println("Close Servo: " + String(servonum) );
+  for (uint16_t pulselen = SERVOMIN; pulselen < SERVOMAX; pulselen += 1) {
+    Serial.println("Pulse: " + String( pulselen ) );
+    pwm.setPWM(servonum, 0, pulselen);
+    delay(100);
+  }
+}
+void closeFlower( int servonum ) {
+  Serial.println("Open Servo: " + String(servonum) );
+  for (uint16_t pulselen = SERVOMAX; pulselen > SERVOMIN; pulselen -= 1) {
+    Serial.println("Pulse: " + String( pulselen ) );
+    pwm.setPWM(servonum, 0, pulselen);
+
+    //strip.setPixelColor(i, strip.Color(0, 255, 255));
+    delay(50);
+  }
+}
+
+#define NEOPIXEL_PIN 2
+#define NEOPIXEL_NUM_PIXELS 32
+Adafruit_NeoPixel strip = Adafruit_NeoPixel(NEOPIXEL_NUM_PIXELS, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800);
 
 // Fill the dots one after the other with a color
 void colorWipe(uint32_t c, uint8_t wait) {
@@ -111,23 +258,23 @@ void rainbow(uint8_t wait) {
 
 #include <Adafruit_SSD1306.h>
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
-#define SCREEN_HEIGHT 32 // OLED display height, in pixels
+#define SCREEN_HEIGHT 64 // OLED display height, in pixels
 // Declaration for an SSD1306 display connected to I2C (SDA, SCL pins)
-#define OLED_RESET     10 // Reset pin # (or -1 if sharing Arduino reset pin)
+#define OLED_RESET     -1 // Reset pin # (or -1 if sharing Arduino reset pin)
 
 
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 void setupDisplay() {
 
-  //  if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) { // Address 0x3D for 128x64
-  //    Serial.println(F("SSD1306 allocation failed"));
-  //    for (;;); // Don't proceed, loop forever
-  //  }
+  if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) { // Address 0x3D for 128x64
+    Serial.println(F("SSD1306 allocation failed"));
+    for (;;); // Don't proceed, loop forever
+  }
 
   display.begin(SSD1306_SWITCHCAPVCC);  // Switch OLED
   display.clearDisplay();
-
+  display.display();
 
   display.setTextSize(1);      // Normal 1:1 pixel scale
   display.setTextColor(WHITE); // Draw white text
@@ -135,6 +282,8 @@ void setupDisplay() {
   //  display.cp437(true);         // Use full 256 char 'Code Page 437' font
 
   display.println("Workstudyplay Thing");
+
+  display.display();
 }
 
 
@@ -153,19 +302,52 @@ void setupNeoPixels() {
 }
 
 
-int servoPin = 14;
+//#include <WebSocketClient.h>
+//using namespace net;
+//WebSocketClient wsClient;
+//
+//void setupWS() {
+//  // Ethernet/WiFi initialization goes here ...
+//  // ...
+//
+//  client.onOpen([](WebSocket &ws) {
+//    const char message[]{ "Hello from Arduino client!" };
+//    ws.send(message, strlen(message));
+//  });
+//  client.onClose([](WebSocket &ws, const WebSocket::CloseCode &code,
+//                   const char *reason, uint16_t length) {
+//    // ...
+//  });
+//  client.onMessage([](WebSocket &ws, const WebSocket::DataType &dataType,
+//                     const char *message, uint16_t length) {
+//    // ...
+//  });
+//
+//  client.open("echo.websocket.org", 80);
+//}
 
-void setup(void)
+void setup()
 {
   Serial.begin(115200);
-  //i2cdetect();
+
+  Serial.println("Mounting FS...");
+  if (!LittleFS.begin()) {
+    Serial.println("Failed to mount file system");
+    return;
+  }
+  if (!loadConfig()) {
+    Serial.println("Failed to load config");
+  } else {
+    Serial.println("Config loaded");
+  }
+
+  scanner.Init();
+  scanner.Scan();
+
+  setupServos();
   //setupDisplay();
 
   setupNeoPixels();
-
-  Serial.println("attaching servo to pin: " + String( servoPin ) );
-  myservo.attach(servoPin);
-
 
   // Connect to WiFi network
   WiFi.begin(ssid, password);
@@ -204,14 +386,14 @@ void setup(void)
 
   // Add service to MDNS-SD
   MDNS.addService("http", "tcp", 80);
-    configureOTA();
-    ArduinoOTA.begin();
+  configureOTA();
+  ArduinoOTA.begin();
 
 
 }
 
 void configureOTA() {
-   ArduinoOTA.onStart([]() {
+  ArduinoOTA.onStart([]() {
     String type;
     if (ArduinoOTA.getCommand() == U_FLASH) {
       type = "sketch";
@@ -247,83 +429,43 @@ void configureOTA() {
 int pos_max = 180;
 int pos;
 
-void openFlower() {
-  if (pos >= 180) {
-    Serial.println("flower already open");
-    return;
-  }
-  Serial.println("START openFlower");
-  for (pos = 0; pos <= pos_max; pos += 1) {
-    // in steps of 1 degree
-    myservo.write(pos);
-    float b = 100 * pos / pos_max;
-    //Serial.println( "At position: " + String(b) + ":" + String(pos) + "/" + String(pos_max) );
 
-    strip.setBrightness(int(b));
-    int i = 0;
-    if (b < 25 ) {
-      Serial.println("0-25");
-      for (i = 0; i < strip.numPixels(); i++) {
-        strip.setPixelColor(i, strip.Color(255, 0, 00));
-      }
-    } else if (b < 50) {
-      Serial.println("50-75");
-      for (i = 0; i < strip.numPixels(); i++) {
-        strip.setPixelColor(i, strip.Color(0, 255, 0));
-      }
-    } else if (b < 75) {
-      Serial.println("50-75");
-      for (i = 0; i < strip.numPixels(); i++) {
-        strip.setPixelColor(i, strip.Color(255, 255, 0));
-      }
-    } else {
-      Serial.println("75-100");
-      for (i = 0; i < strip.numPixels(); i++) {
-        strip.setPixelColor(i, strip.Color(0, 255, 255));
-      }
-    }
-    strip.show();
-    delay(15);
-  }
-  Serial.println("END openFlower");
-}
-
-void closeFlower() {
-  if (pos <= 0) {
-    Serial.println("flower already closed");
-    return;
-  }
-  for (pos = pos_max; pos >= 0; pos -= 1) {
-    // in steps of 1 degree
-    myservo.write(pos);
-
-    float b = 100 * pos / pos_max;
-    Serial.println( "At position: " + String(b) + ":" + String(pos) + "/" + String(pos_max) );
-
-    strip.setBrightness(int(b));
-    int i = 0;
-    if (b < 25 ) {
-      for (i = 0; i < strip.numPixels(); i++) {
-        strip.setPixelColor(i, strip.Color(255, 0, 00));
-      }
-    } else if (b < 50) {
-      for (i = 0; i < strip.numPixels(); i++) {
-        strip.setPixelColor(i, strip.Color(0, 255, 0));
-      }
-    } else if (b < 75) {
-      for (i = 0; i < strip.numPixels(); i++) {
-        strip.setPixelColor(i, strip.Color(255, 255, 0));
-      }
-    } else {
-      for (i = 0; i < strip.numPixels(); i++) {
-        strip.setPixelColor(i, strip.Color(0, 255, 255));
-      }
-    }
-    strip.show();
-    delay(15);
-  }
-  Serial.println("END closeFlower");
-}
+//void closeFlower() {
+//  if (pos <= 0) {
+//    Serial.println("flower already closed");
+//    return;
+//  }
+//  for (pos = pos_max; pos >= 0; pos -= 1) {
+//    // in steps of 1 degree
+//    myservo.write(pos);
+//
+//    float b = 100 * pos / pos_max;
+//    Serial.println( "At position: " + String(b) + ":" + String(pos) + "/" + String(pos_max) );
+//
+//    strip.setBrightness(int(b));
+//    int i = 0;
+//    if (b < 25 ) {
+//      for (i = 0; i < strip.numPixels(); i++) {
+//        strip.setPixelColor(i, strip.Color(255, 0, 00));
+//      }
+//    } else if (b < 50) {
+//      for (i = 0; i < strip.numPixels(); i++) {
+//        strip.setPixelColor(i, strip.Color(0, 255, 0));
+//      }
+//    } else if (b < 75) {
+//      for (i = 0; i < strip.numPixels(); i++) {
+//        strip.setPixelColor(i, strip.Color(255, 255, 0));
+//      }
+//    } else {
+//      for (i = 0; i < strip.numPixels(); i++) {
+//        strip.setPixelColor(i, strip.Color(0, 255, 255));
+//      }
+//    }
+//    strip.show();
+//    delay(15);
+//  }
+//  Serial.println("END closeFlower");
+//}
 
 void goHome() {
   server.send(200, "text/html", "<script>window.location='/'</script>");
@@ -353,11 +495,11 @@ void handleSetColor() {
 }
 
 void handleOpenFlower() {
-  openFlower();
+  openFlower(1);
   goHome();
 }
 void handleCloseFlower() {
-  closeFlower();
+  closeFlower(1);
   goHome();
 }
 
@@ -385,9 +527,87 @@ String getHTTPParam( String paramName ) {
 void setupHTTP() {
   server.on("/", handleRoot);
 
+
+
+  server.on("/config", []() {
+    File configFile = LittleFS.open("/config.json", "r");
+    if (!configFile) {
+      Serial.println("Failed to open config file");
+      return false;
+    }
+
+    size_t size = configFile.size();
+    if (size > 1024) {
+      Serial.println("Config file size is too large");
+      server.send(200, "application/json", "{ \"status\":\"fail\" }" );
+      return false;
+    }
+
+    // Allocate a buffer to store contents of the file.
+    //  std::unique_ptr<char[]> buf(new char[size]);
+
+    // We don't use String here because ArduinoJson library requires the input
+    // buffer to be mutable. If you don't use ArduinoJson, you may as well
+    // use configFile.readString instead.
+    //    configFile.readBytes(buf.get(), size);
+
+    server.send(200, "application/json", configFile.readString() );
+  });
+
+  server.on("/setup", []() {
+    String incoming_hostname = getHTTPParam("hostname");
+    if ( incoming_hostname.length() > 0 ) {
+      StaticJsonDocument<200> doc;
+      doc["configVersion"] = "1.0";
+      doc["hostname"] = incoming_hostname;
+      File configFile = LittleFS.open("/config.json", "w");
+      if (!configFile) {
+        Serial.println("Failed to open config file for writing");
+        return false;
+      }
+      serializeJson(doc, configFile);
+      Serial.println( "Wrote config.json" );
+
+      int ok = loadConfig();
+
+      if ( ok == false ) {
+        server.send(200, "application/json", "{ \"status\":\"fail\", \"hostname\": \"" + String(incoming_hostname) + "\" }" );
+      } else {
+        server.send(200, "application/json", "{ \"status\":\"ok\", \"hostname\": \"" + String(incoming_hostname) + "\" }" );
+      }
+    }
+  });
+
   server.on("/open-flower", handleOpenFlower);
   server.on("/close-flower", handleCloseFlower);
   server.on("/rainbow", handleRainbow);
+
+  server.on("/open-claw", []() {
+    int servonum = 1;
+    openServo( servonum );
+    server.send(200, "application/json", "{ \"status\":\"ok\"}" );
+  });
+  server.on("/close", []() {
+
+    for (int n = 90; n < 1000; n += 10 ) {
+      setServo(1, n);
+      delay(200);
+    }
+
+  });
+  server.on("/close-claw", []() {
+    int servonum = 1;
+    closeServo( servonum );
+    server.send(200, "application/json", "{ \"status\":\"ok\"}" );
+  });
+  server.on("/claw", []() {
+    String p = getHTTPParam("p");
+    if ( p.length() > 0 ) {
+      Serial.println("Setting position: " + p );
+      setServo(1, p.toInt());
+      server.send(200, "application/json", "{ \"status\":\"ok\"}" );
+    }
+  });
 
   server.on("/control", []() {
     String brightness = getHTTPParam("brightness");
@@ -438,12 +658,12 @@ void setupHTTP() {
       strip.show();
     }
 
-    String pos = getHTTPParam("pos");
-
-    if ( pos.length() > 0 ) {
-      Serial.println("Set servo position: " + String(pos.toInt()) );
-      myservo.write(pos.toInt());
-    }
+    //    String pos = getHTTPParam("pos");
+    //
+    //    if ( pos.length() > 0 ) {
+    //      Serial.println("Set servo position: " + String(pos.toInt()) );
+    //      myservo.write(pos.toInt());
+    //    }
 
     // server.send(200, "application/json", "{ \"pos\":\"" + String(pos) + "\", \"r\":\"" + String(r) + "\", \"g\":\"" + String(g) + "\", \"b\":\"" + String(b) + "\" }" );
     server.send(200, "application/json", "{ \"status\":\"ok\"}" );
@@ -461,13 +681,15 @@ void setupHTTP() {
   server.begin();
 }
 
+
+
 void SetAll( int r, int g, int b ) {
 
-    for (int i = 0; i < strip.numPixels(); i++) {
-      //Serial.println("setting pixel " + String(i) + " to " + r + "," + g + "," + b );
-      strip.setPixelColor(i, strip.Color(r, g, b));
-    }
-    strip.show();
+  for (int i = 0; i < strip.numPixels(); i++) {
+    //Serial.println("setting pixel " + String(i) + " to " + r + "," + g + "," + b );
+    strip.setPixelColor(i, strip.Color(r, g, b));
+  }
+  strip.show();
 }
 
 String scriptLibrary() {
@@ -480,6 +702,9 @@ String Button( String url, String label ) {
 }
 
 void handleNotFound() {
+
+  Serial.println("not found");
+
   String message = "File Not Found\n\n";
   message += "URI: ";
   message += server.uri();

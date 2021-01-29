@@ -46,9 +46,11 @@ const setFlowerProperties = ( props ) => {
     flowerState = props;
   }
   
-const host = "http://10.5.1.161"
-
+const host = "http://10.5.1.162"
+alert( host )
 const sendFlowerProperties = () => {
+
+  alert('s')
   const props = flowerState;
   var uri = host + "/light?r=" + props.r + "&g=" + props.g + "&b=" + props.b;
   uri += "&pos=" + props.pos
@@ -99,7 +101,6 @@ class Component extends React.Component {
   sendSequence = (props) => {    
     const delay = 100
     const {
-      host = "http://10.5.1.161",
       currentStepIndex = 0,
       loop = true,
       sequence = [
@@ -163,7 +164,7 @@ class Component extends React.Component {
 
     } else if ( currentStepIndex +1 < sequence.length ) {
       nextProps = {
-        host: props.host,        
+        host: host,        
         currentStepIndex: currentStepIndex + 1,
         sequence: sequence,
       }
@@ -265,7 +266,7 @@ class Component extends React.Component {
         {/* <IconButton onClick={sendFlowerProperties} color="secondary">
           Set Color
         </IconButton> */}
-        <Button style={{width:"100%", marginBottom: 5}} variant="contained" size="large" color="primary" onClick={sendFlowerProperties}>Set Star Color</Button>
+        <Button style={{width:"100%", marginBottom: 5}} variant="contained" size="large" color="primary" onClick={() => { alert('s')}}>sssSet Star Color</Button>
         <Button style={{width:"100%", marginBottom: 5}} variant="contained" size="large" color="primary" onClick={sendWipe}>Wipe</Button>
       </div>
 
@@ -324,7 +325,7 @@ class Component extends React.Component {
               max={100}
               /> 
           </Button>
-        </div>
+        </div>1
 
         <div style={{
           background: 'white',
