@@ -46,13 +46,11 @@ const setFlowerProperties = ( props ) => {
     flowerState = props;
   }
   
-const host = "http://10.5.1.162"
-alert( host )
-const sendFlowerProperties = () => {
+const defaultHost = "http://10.5.1.174"
 
-  alert('s')
+const sendFlowerProperties = () => {
   const props = flowerState;
-  var uri = host + "/light?r=" + props.r + "&g=" + props.g + "&b=" + props.b;
+  var uri = defaultHost + "/light?r=" + props.r + "&g=" + props.g + "&b=" + props.b;
   uri += "&pos=" + props.pos
   console.log( props)
   if (props.brightness && parseInt(props.brightness) ) {
@@ -73,7 +71,7 @@ const sendFlowerProperties = () => {
 const sendWipe = () => {
   const props = flowerState;
   
-  var uri = host + "/wipe?a=wipe" //?r=" + props.r + "&g=" + props.g + "&b=" + props.b;
+  var uri = defaultHost + "/wipe?a=wipe" //?r=" + props.r + "&g=" + props.g + "&b=" + props.b;
  // uri += "&pos=" + props.pos
   console.log( props)
   if (props.brightness && parseInt(props.brightness) ) {
@@ -99,8 +97,9 @@ class Component extends React.Component {
   };
 
   sendSequence = (props) => {    
-    const delay = 100
+    const delay = 2500
     const {
+      host = defaultHost,
       currentStepIndex = 0,
       loop = true,
       sequence = [
@@ -164,7 +163,7 @@ class Component extends React.Component {
 
     } else if ( currentStepIndex +1 < sequence.length ) {
       nextProps = {
-        host: host,        
+        host: props.host,        
         currentStepIndex: currentStepIndex + 1,
         sequence: sequence,
       }
@@ -202,11 +201,55 @@ class Component extends React.Component {
     b: 0,
   } ) => {
 
-    var uri = host + "/light?r=" + props.r + "&g=" + props.g + "&b=" + props.b;
+    var uri = defaultHost + "/light?r=" + props.r + "&g=" + props.g + "&b=" + props.b;
     console.log( props)
     if (props.brightness && parseInt(props.brightness) ) {
         uri += "&brightness=" + props.brightness
     }
+    fetch(uri, {
+        method: 'GET',
+    })
+    .then(response => {
+        return response.json()
+    })
+    .then(responseAsJson => {
+        this.setState({ loading: false, data: responseAsJson.data })
+    })
+    
+  }
+
+  openClaw = () => {
+    var uri = defaultHost + "/open-claw";
+    fetch(uri, {
+        method: 'GET',
+    })
+    .then(response => {
+        return response.json()
+    })
+    .then(responseAsJson => {
+        this.setState({ loading: false, data: responseAsJson.data })
+    })
+  }
+  closeClaw = () => {
+    var uri = defaultHost + "/close-claw";
+    fetch(uri, {
+        method: 'GET',
+    })
+    .then(response => {
+        return response.json()
+    })
+    .then(responseAsJson => {
+        this.setState({ loading: false, data: responseAsJson.data })
+    })
+  }
+
+  sendClaw = ( props = {
+    p: 0,
+  } ) => {
+
+    var uri = defaultHost + "/claw?p=" + props.p;
+    console.log( props)
+    
     fetch(uri, {
         method: 'GET',
     })
@@ -228,7 +271,12 @@ class Component extends React.Component {
 
     console.log( newValue )
   }
+handleClawSliderChange = (event, newValue) => {
 
+  console.log( newValue )
+  this.sendClaw( { p: newValue })
+
+}
   handleBrightnessSliderChange = (event, newValue) => {
     this.setState({ brightness: newValue });
     flowerState.brightness = newValue;
@@ -266,7 +314,7 @@ class Component extends React.Component {
         {/* <IconButton onClick={sendFlowerProperties} color="secondary">
           Set Color
         </IconButton> */}
-        <Button style={{width:"100%", marginBottom: 5}} variant="contained" size="large" color="primary" onClick={() => { alert('s')}}>sssSet Star Color</Button>
+        <Button style={{width:"100%", marginBottom: 5}} variant="contained" size="large" color="primary" onClick={sendFlowerProperties}>Set Star Color</Button>
         <Button style={{width:"100%", marginBottom: 5}} variant="contained" size="large" color="primary" onClick={sendWipe}>Wipe</Button>
       </div>
 
@@ -293,13 +341,48 @@ class Component extends React.Component {
         <select >
         </select>
         <Button style={{width:"100%", marginBottom: 5}} variant="contained" size="large" color="primary" onClick={this.sendSequence}>Send Sequence</Button>
+
+<div>
+    <Button style={{width:"50%", marginBottom: 5}} variant="contained" size="large" color="primary" onClick={openFlower}>Open Flower</Button>
+          <Button style={{width:"50%", marginBottom: 5}} variant="contained" size="large" color="primary" onClick={closeFlower}>Close Flower</Button>
         
+  </div>        
 
         <select onChange={(v) => { this.handleHostChange( ) } }>
           <option value="10.5.1.161">Sparky</option>
           <option value="10.5.1.162">Boop</option>
         </select>
         
+
+        <div style={{
+            color: '#3f51b5',
+            fontSize: 12,
+            fontWeight: 'bold',
+            textAlign:'center',
+            background: 'white',
+            borderRadius: 4,   
+            marginBottom: 5,
+          }}>
+          <strong>Claw</strong>
+
+          <Button style={{width:"100%", marginBottom: 5}} variant="contained" size="large" color="primary" onClick={this.openClaw}>Open Claw</Button>
+          <Button style={{width:"100%", marginBottom: 5}} variant="contained" size="large" color="primary" onClick={this.closeClaw}>Close Claw</Button>
+        
+
+           <Button style={{width:"100%", marginBottom: 5}} variant="contained" size="large" color="transparent">
+            <Slider
+              defaultValue={this.state.clawPosition}
+              onChange={this.handleClawSliderChange}
+              getAriaValueText={valuetext}
+              aria-labelledby="claw"
+              valueLabelDisplay="off"
+              step={5}
+              // marks
+              min={0}
+              max={180}
+              /> 
+          </Button>
+        </div>
 
         
         <div style={{
@@ -325,7 +408,7 @@ class Component extends React.Component {
               max={100}
               /> 
           </Button>
-        </div>1
+        </div>
 
         <div style={{
           background: 'white',
@@ -436,9 +519,6 @@ const handleSliderChange = (event, newValue) => {
 };
 
 
-const openFlower = () => {
-    
-}
 var flowerStepNum = 0;
 var flowerSteps = [
     { r: 0, g: 0, b: 0, pos: 0 , brigtness: 0 },
@@ -457,7 +537,28 @@ const stepFlower = () => {
 }
 
 const closeFlower = () => {
-
+  var uri = defaultHost + "/close-flower";
+  fetch(uri, {
+      method: 'GET',
+  })
+  .then(response => {
+      return response.json()
+  })
+  .then(responseAsJson => {
+      this.setState({ loading: false, data: responseAsJson.data })
+  })
+}
+const openFlower = () => {
+  var uri = defaultHost + "/open-flower";
+  fetch(uri, {
+      method: 'GET',
+  })
+  .then(response => {
+      return response.json()
+  })
+  .then(responseAsJson => {
+      this.setState({ loading: false, data: responseAsJson.data })
+  })
 }
 
 
