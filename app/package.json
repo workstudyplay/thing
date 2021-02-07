@@ -10,6 +10,8 @@
     "@testing-library/jest-dom": "^5.11.4",
     "@testing-library/react": "^11.1.0",
     "@testing-library/user-event": "^12.1.10",
+    "graphiql": "^1.4.0-rc.1",
+    "graphql": "^15.5.0",
     "js-cookie": "^2.2.1",
     "react": "^17.0.1",
     "react-dom": "^17.0.1",
@@ -17,6 +19,7 @@
     "react-three-fiber": "^5.3.18",
     "storybook": "^6.1.17",
     "three": "^0.125.2",
+    "thunder-react": "^0.2.1",
     "web-vitals": "^1.0.1",
     "zeropad": "^1.1.0"
   },
