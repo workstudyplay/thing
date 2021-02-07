@@ -1,6 +1,6 @@
 import React from 'react'
 
-const SOC = () => {
+const SOC = ({ chipName = ''}) => {
     const height = 120
     const width = 80
     const fill = 'silver'
@@ -22,13 +22,14 @@ const SOC = () => {
                 width: '100%',
                 margin: 'auto',
             }}>
-                ESP8266
+                {chipName}
             </div>
         </div>
     )
 }
 
-export const ESP8266 = ({ id }) => {
+export const ESP8266 = ({data = {} }) => {
+    const { id = '', name = '', address = '', chipName = '' } = data
     const height = 280
     const width = 120
     const fill = 'rgb(200,200,80)'
@@ -40,8 +41,24 @@ export const ESP8266 = ({ id }) => {
             border: '1px solid black',
             position: 'relative',
             fontFamily: 'arial',
+            display: 'inline-block',
+            margin: 10,
         }}>
-            <SOC />
+            <div style={{
+                position: 'absolute',
+                top: 10,
+                left: 10,
+                right: 10,
+                height: 100,
+                background: 'black',
+                color: 'white',
+                textAlign: 'center',
+                lineHeight: 1.5,
+            }}>
+                <strong>{name}</strong><br />
+                <strong>{address}</strong><br />
+            </div>
+            <SOC chipName={chipName} />
         </div>
     )
 }

@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rs/cors"
 	"github.com/rs/zerolog/log"
 	"github.com/samsarahq/thunder/graphql"
 	"github.com/samsarahq/thunder/graphql/graphiql"
@@ -26,6 +27,8 @@ import (
 // server is our graphql server.
 type server struct {
 	posts  []Post
+	boards  []Board
+	
 	tokens []TokenStatus
 
 	db *sql.DB
@@ -57,6 +60,9 @@ func (s *server) registerQuery(schema *schemabuilder.Schema) {
 
 	obj.FieldFunc("posts", func() []Post {
 		return s.posts
+	})
+	obj.FieldFunc("boards", func() []Board {
+		return s.boards
 	})
 
 	obj.FieldFunc("tokens", func() []TokenStatus {
@@ -116,19 +122,21 @@ func (s *server) schema(db *sql.DB) *graphql.Schema {
 }
 
 func (s *server) DataWatcher() {
-	s.pollPosts()
+	s. pollTables()
 	// setup interval for checking the status of tokens, every 5 minutes is an arbitrary decision, we may want to revisit
 	for range time.Tick(time.Second * 15) {
-		s.pollPosts()
+		s. pollTables()
 	}
 }
 
+func (s *server) pollTables() {
+	s.pollPosts()
+	s.pollBoards()
+}
+
 func (s *server) pollPosts() {
-
 	log.Info().Msg("poll posts table")
-
 	var items = make([]Post, 0)
-
 	query := `
 	SELECT 
 		id,
@@ -164,6 +172,47 @@ func (s *server) pollPosts() {
 	s.posts = items
 }
 
+
+func (s *server) pollBoards() {
+	log.Info().Msg("poll boards table")
+	var items = make([]Board, 0)
+	query := `
+	SELECT 
+		id,
+		name,
+		address,
+		owner,
+		chip_name
+	FROM 
+		boards
+	`
+	records, queryError := s.db.Query(query)
+	if queryError != nil {
+		panic(queryError)
+	}
+	defer records.Close()
+	for records.Next() {
+		row := Board{}
+		err := records.Scan(
+			&row.ID,
+			&row.Name,
+			&row.Address,
+			&row.Owner,
+			&row.ChipName,			
+		)
+		if err == nil {
+			items = append(items, row)
+		} else {
+			log.Error().Msg(err.Error())
+		}
+	}
+	recordsErr := records.Err()
+	if recordsErr != nil {
+		log.Error().Msg(recordsErr.Error())
+	}
+	s.boards = items
+}
+
 func connectDatabase(postgresURI string) (*sql.DB, error) {
 	db, err := NewDatabaseConnection(postgresURI)
 	if err != nil {
@@ -182,6 +231,35 @@ type TokenStatus struct {
 	MinutesTillExpired int
 }
 
+
+
+func configureCORS(publicURI string, port int) *cors.Cors {
+	allowed := []string{
+		"http://localhost:3030",
+		"http://localhost:3000",
+		"http://localhost:3032",
+		publicURI,
+		fmt.Sprintf("%s:%d", publicURI, port),
+	}
+
+	c := cors.New(cors.Options{
+		AllowedOrigins:   allowed,
+		AllowCredentials: true,
+		AllowedHeaders: []string{
+			"Authorization",
+			"Content-Type",
+		},
+		AllowedMethods: []string{
+			"OPTIONS",
+			"POST",
+		},
+
+		// Enable Debugging for testing, consider disabling in production
+		Debug: false,
+	})
+	return c
+}
+
 func New(config configuration.Config) {
 
 	db, err := connectDatabase(config.PostgresURI)
@@ -197,13 +275,21 @@ func New(config configuration.Config) {
 	// Instantiate a server, build a server, and serve the schema on port 3030.
 	server := &server{
 		posts: []Post{},
+		boards: []Board{},		
 	}
+
+	corsConfig := configureCORS(config.PublicURI, config.HTTPPort)
+
 
 	schema := server.schema(db)
 	introspection.AddIntrospectionToSchema(schema)
 
 	// Expose schema and graphiql.
 	http.Handle("/graphql", WSAuth(graphql.Handler(schema)))
+
+	graphQLHandler := corsConfig.Handler(graphql.HTTPHandler(schema))
+	http.Handle("/graphql-http",graphQLHandler)
+
 	http.Handle("/graphiql/", http.StripPrefix("/graphiql/", graphiql.Handler()))
 
 	wg.Add(1)

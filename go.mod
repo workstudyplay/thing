@@ -9,6 +9,7 @@ require (
 	github.com/lib/pq v1.9.0
 	github.com/oleksandr/bonjour v0.0.0-20160508152359-5dcf00d8b228
 	github.com/rakyll/statik v0.1.7 // indirect
+	github.com/rs/cors v1.7.0
 	github.com/rs/zerolog v1.20.0
 	github.com/samsarahq/go v0.0.0-20191220233105-8077c9fbaed5 // indirect
 	github.com/samsarahq/thunder v0.5.0

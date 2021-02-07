@@ -3,6 +3,7 @@ import { createClient } from 'graphql-ws';
 
 import { a } from './parse'
 import { Client } from 'graphql-ws'
+import { Post } from '../posts'
 
 const WSClient = () => {
   const [count, setCount] = useState(1)
@@ -69,17 +70,8 @@ const WSClient = () => {
 }
 const Listing = ({ time = '??:??:??', posts = [] }) =>
   <div>
-    <div>
-      <strong>[{time}]</strong>
-    </div>
-    {true ? (posts.map(entry =>
-      <div key={`post-${entry.id}`}>
-        <h1>{entry.title}</h1>
-        <h3>{entry.author}</h3>
-        <div>
-          {entry.body}
-        </div>
-      </div>
+    {posts.length>0 ? (posts.map(entry =>
+      <Post data={entry} />
 
     )) : <div>No posts
       </div>}
