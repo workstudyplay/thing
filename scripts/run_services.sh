@@ -28,7 +28,7 @@ fi
 # /c/Program\ Files/Docker/Docker/DockerCli.exe -SwitchLinuxEngine
 fi
 
-if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "linux-gnu" ]]; then
+if [[ "$OSTYPE" == "darwin19" || "$OSTYPE" == "msys" || "$OSTYPE" == "linux-gnu" ]]; then
 
 REDIS_INSTANCE_NAME="workstudyplay-redis"
 POSTGRES_INSTANCE_NAME="workstudyplay-postgres"

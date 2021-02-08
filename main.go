@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/workstudyplay/thing/internal/configuration"
 	"github.com/workstudyplay/thing/internal/server"
@@ -17,5 +18,12 @@ func main() {
 	fmt.Printf("POSTGRES_URI: %s\n", config.PostgresURI)
 	fmt.Printf("SERVICE_PORT: %d\n", config.HTTPPort)
 
+	var wg sync.WaitGroup
+
 	server.New(config)
+
+	wg.Add(1)
+
+	wg.Wait()
+
 }

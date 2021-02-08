@@ -212,7 +212,7 @@ const ErrorDisplay = (error) => <div style={{
 const SomeData = () => {
     const q = gql`
         query {
-            posts {
+            items: articles {
                 id
                 title
                 author
@@ -231,10 +231,10 @@ const SomeData = () => {
     if (loading) {
         return <Loading />
     }
-    if  (data.posts.length == 0 ) {
-        return <h2>No posts available</h2>
+    if  (data.items.length == 0 ) {
+        return <h2>No articles available</h2>
     }
-    return <div>{ data.posts.map( entry => <Post data={entry} /> ) }</div>
+    return <div>{ data.items.map( entry => <Post data={entry} /> ) }</div>
 }
 
 
